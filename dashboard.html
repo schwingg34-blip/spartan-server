@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Spartan SMC Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+<style>
+*, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
+body { background:#060b14; color:#e2e8f0; font-family:'Syne',sans-serif; min-height:100vh; }
+::-webkit-scrollbar { width:4px; }
+::-webkit-scrollbar-track { background:#0d1117; }
+::-webkit-scrollbar-thumb { background:#1e2433; border-radius:2px; }
+input[type=range] { -webkit-appearance:none; width:100%; height:4px; border-radius:2px; outline:none; cursor:pointer; }
+input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:14px; height:14px; background:#fff; border-radius:50%; cursor:pointer; box-shadow:0 0 6px rgba(124,58,237,.7); }
+@keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.4;transform:scale(.75)} }
+@keyframes slideIn { from{opacity:0;transform:translateY(-12px)} to{opacity:1;transform:translateY(0)} }
+@keyframes flashGreen { 0%{box-shadow:0 0 0 0 rgba(16,185,129,.6)} 70%{box-shadow:0 0 0 12px rgba(16,185,129,0)} 100%{box-shadow:none} }
+@keyframes flashRed { 0%{box-shadow:0 0 0 0 rgba(239,68,68,.6)} 70%{box-shadow:0 0 0 12px rgba(239,68,68,0)} 100%{box-shadow:none} }
+button { cursor:pointer; font-family:'Syne',sans-serif; }
+
+.header { display:flex; align-items:center; justify-content:space-between; padding:12px 20px; border-bottom:1px solid #0a1020; background:rgba(6,11,20,.98); position:sticky; top:0; z-index:100; gap:12px; flex-wrap:wrap; }
+.logo { display:flex; align-items:center; gap:10px; }
+.logo-icon { width:30px; height:30px; border-radius:7px; background:linear-gradient(135deg,#7C3AED,#2563EB); display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:900; color:#fff; flex-shrink:0; }
+.status-area { display:flex; align-items:center; gap:6px; }
+.dot { width:7px; height:7px; border-radius:50%; flex-shrink:0; }
+.scorebar { display:flex; align-items:center; gap:20px; padding:14px 20px; background:#070d1a; border-bottom:1px solid #0a1020; flex-wrap:wrap; }
+.tabs { display:flex; border-bottom:1px solid #0a1020; padding:0 20px; background:#060b14; overflow-x:auto; }
+.tab-btn { padding:11px 18px; font-size:10px; font-weight:600; letter-spacing:.1em; text-transform:uppercase; color:#374151; border:none; border-bottom:2px solid transparent; background:none; transition:all .18s; white-space:nowrap; }
+.tab-btn.active { color:#e2e8f0; border-bottom-color:#7C3AED; }
+.tab-btn:hover { color:#9ca3af; }
+.content { padding:18px 20px; max-width:1080px; margin:0 auto; }
+.signal-card { border-radius:10px; padding:14px 16px; margin-bottom:8px; position:relative; border:1px solid #101828; background:#080d18; }
+.signal-card.new-signal { animation:slideIn .35s ease; }
+.metrics { display:flex; gap:6px; flex-wrap:wrap; margin:10px 0; }
+.metric { background:#060b14; border-radius:6px; padding:5px 10px; border:1px solid #0f1929; }
+.metric-label { font-size:8px; color:#4b5563; letter-spacing:.08em; margin-bottom:2px; }
+.metric-val { font-family:'JetBrains Mono',monospace; font-size:13px; font-weight:700; }
+.pills { display:flex; gap:4px; flex-wrap:wrap; }
+.pill { display:flex; align-items:center; gap:4px; border-radius:4px; padding:3px 8px; border:1px solid #1a2133; background:rgba(255,255,255,.02); }
+.pill.on { background:rgba(16,185,129,.08); border-color:rgba(16,185,129,.28); }
+.pill-dot { width:5px; height:5px; border-radius:50%; background:#2d3748; flex-shrink:0; }
+.pill.on .pill-dot { background:#10B981; }
+.pill-lbl { font-size:9px; color:#2d3748; letter-spacing:.06em; }
+.pill.on .pill-lbl { color:#9CA3AF; }
+.stat-box { background:#070d1a; border:1px solid #0a1020; border-radius:10px; padding:12px 14px; }
+.settings-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+.settings-box { background:#070d1a; border:1px solid #0a1020; border-radius:10px; padding:18px; }
+.settings-box.full { grid-column:span 2; }
+.mode-btn { flex:1; padding:6px; border-radius:5px; font-size:9px; font-weight:600; border:1px solid #0f1929; background:transparent; color:#374151; transition:all .15s; font-family:'JetBrains Mono',monospace; }
+.mode-btn.active { border-color:#7C3AED; background:rgba(124,58,237,.15); color:#a78bfa; }
+.ring-wrap { position:relative; width:72px; height:72px; flex-shrink:0; }
+.ring-inner { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+.empty-state { text-align:center; padding:60px 20px; color:#374151; }
+.empty-icon { font-size:40px; margin-bottom:12px; }
+.empty-title { font-size:14px; font-weight:700; color:#4b5563; margin-bottom:6px; }
+.empty-sub { font-size:11px; line-height:1.7; }
+.override-banner { background:rgba(245,158,11,.08); border:1px solid rgba(245,158,11,.3); border-radius:8px; padding:10px 16px; margin-bottom:10px; display:flex; align-items:center; gap:10px; animation:slideIn .3s ease; }
+@media (max-width:600px) { .settings-grid{grid-template-columns:1fr} .settings-box.full{grid-column:span 1} }
+</style>
+</head>
+<body>
+<div id="app">
+  <div style="display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:16px">
+    <div style="width:30px;height:30px;border-radius:7px;background:linear-gradient(135deg,#7C3AED,#2563EB);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:900;color:#fff">S</div>
+    <div style="font-size:11px;color:#374151;font-family:'JetBrains Mono',monospace">Connecting...</div>
+  </div>
+</div>
+
+<script>
+// ── CONFIG ────────────────────────────────────────────────────
+// Automatically detects whether running on Railway or locally
+const HOST    = window.location.hostname;
+const IS_LOCAL = HOST === "localhost" || HOST === "127.0.0.1";
+const WS_URL  = IS_LOCAL
+  ? `ws://${HOST}:8000/ws`
+  : `wss://${HOST}/ws`;
+
+// ── STATE ─────────────────────────────────────────────────────
+let state = {
+  connected:   false,
+  signals:     [],
+  overrides:   [],
+  tab:         "signals",
+  riskMode:    "ATR",
+  riskWiggle:  0,
+  profWiggle:  0,
+  tp1RR:       1.0,
+  tp2RR:       2.0,
+  volData:     genVol(),
+  bullScore:   0,
+  bearScore:   0,
+};
+
+let ws = null;
+let reconnectTimer = null;
+
+// ── HELPERS ───────────────────────────────────────────────────
+function genVol() {
+  return Array.from({length:40}, (_,i) => ({ t:i, v:Math.round((Math.random()-.47)*9000) }));
+}
+const fmtP   = v => (v != null && v !== 0) ? Number(v).toFixed(2) : "—";
+const calcRR = (e,t,s) => { const r=Math.abs(t-e),k=Math.abs(s-e); return k>0?(r/k).toFixed(1)+"R":"—"; };
+const clamp  = (v,a,b) => Math.max(a,Math.min(b,v));
+const SC     = s => s>=80?"#10B981":s>=65?"#F59E0B":"#6b7280";
+const NC     = i => ({high:"#EF4444",medium:"#F59E0B",low:"#6b7280"})[i]||"#6b7280";
+const SENTC  = s => ({bullish:"#10B981",bearish:"#EF4444",neutral:"#6b7280"})[s]||"#6b7280";
+const DIRC   = (dir,strong) => dir==="LONG"?(strong?"#10B981":"#6EE7B7"):(strong?"#EF4444":"#FCA5A5");
+
+// ── WEBSOCKET ─────────────────────────────────────────────────
+function connect() {
+  console.log("[WS] Connecting to", WS_URL);
+  ws = new WebSocket(WS_URL);
+
+  ws.onopen = () => {
+    console.log("[WS] Connected");
+    state.connected = true;
+    clearTimeout(reconnectTimer);
+    render();
+  };
+
+  ws.onmessage = (e) => {
+    const msg = JSON.parse(e.data);
+    if (msg.type === "ping") return;
+
+    if (msg.type === "history") {
+      state.signals = msg.signals || [];
+      if (state.signals.length > 0) {
+        const latest = state.signals[0];
+        state.bullScore = latest.direction === "LONG"  ? latest.score : 30;
+        state.bearScore = latest.direction === "SHORT" ? latest.score : 30;
+      }
+      render();
+      return;
+    }
+
+    if (msg.type === "signal") {
+      state.signals.unshift(msg.data);
+      if (state.signals.length > 50) state.signals.pop();
+      const s = msg.data;
+      state.bullScore = s.direction === "LONG"  ? s.score : Math.max(0, state.bullScore - 5);
+      state.bearScore = s.direction === "SHORT" ? s.score : Math.max(0, state.bearScore - 5);
+      render();
+      flashAlert(s);
+      return;
+    }
+
+    if (msg.type === "override") {
+      state.overrides.unshift(msg.data);
+      if (state.overrides.length > 5) state.overrides.pop();
+      render();
+    }
+  };
+
+  ws.onerror = (e) => console.error("[WS] Error", e);
+
+  ws.onclose = () => {
+    console.log("[WS] Disconnected — reconnecting in 3s");
+    state.connected = false;
+    render();
+    reconnectTimer = setTimeout(connect, 3000);
+  };
+}
+
+function flashAlert(sig) {
+  const isLong = sig.direction === "LONG";
+  const overlay = document.createElement("div");
+  overlay.style.cssText = `
+    position:fixed;inset:0;pointer-events:none;z-index:9999;
+    border:3px solid ${isLong?"#10B981":"#EF4444"};
+    border-radius:0;animation:${isLong?"flashGreen":"flashRed"} .8s ease forwards;`;
+  document.body.appendChild(overlay);
+  setTimeout(() => overlay.remove(), 900);
+}
+
+// ── SCORE RING ─────────────────────────────────────────────────
+function scoreRingHTML(score, label, color) {
+  const r=28, circ=2*Math.PI*r, dash=(score/100)*circ;
+  return `
+    <div class="ring-wrap">
+      <svg width="72" height="72" style="transform:rotate(-90deg);display:block">
+        <circle cx="36" cy="36" r="${r}" fill="none" stroke="#131a28" stroke-width="7"/>
+        <circle cx="36" cy="36" r="${r}" fill="none" stroke="${color}" stroke-width="7"
+          stroke-dasharray="${dash.toFixed(1)} ${(circ-dash).toFixed(1)}" stroke-linecap="round"
+          style="transition:stroke-dasharray .5s ease"/>
+      </svg>
+      <div class="ring-inner">
+        <span style="font-family:'JetBrains Mono',monospace;font-size:17px;font-weight:700;color:${color};line-height:1">${score}</span>
+        <span style="font-size:8px;color:#6b7280;letter-spacing:.1em;text-transform:uppercase;margin-top:1px">${label}</span>
+      </div>
+    </div>`;
+}
+
+// ── DELTA CHART ────────────────────────────────────────────────
+function deltaChartHTML(data) {
+  const max = Math.max(...data.map(d=>Math.abs(d.v)), 1);
+  const bars = data.map(d => {
+    const pct = Math.round((Math.abs(d.v)/max)*70);
+    const col = d.v >= 0 ? "#10B981" : "#EF4444";
+    const isPos = d.v >= 0;
+    return `<div style="flex:1;display:flex;flex-direction:column;align-items:stretch;height:160px">
+      <div style="flex:1;display:flex;flex-direction:column;justify-content:flex-end">
+        ${isPos?`<div style="height:${pct}%;background:${col};opacity:.7;border-radius:2px 2px 0 0;min-height:1px"></div>`:""}
+      </div>
+      <div style="height:1px;background:#0f1929;flex-shrink:0"></div>
+      <div style="flex:1;display:flex;flex-direction:column;justify-content:flex-start">
+        ${!isPos?`<div style="height:${pct}%;background:${col};opacity:.7;border-radius:0 0 2px 2px;min-height:1px"></div>`:""}
+      </div>
+    </div>`;
+  }).join("");
+
+  const buyP = data.filter(d=>d.v>0).reduce((a,d)=>a+d.v,0);
+  const selP = Math.abs(data.filter(d=>d.v<0).reduce((a,d)=>a+d.v,0));
+  const net  = data.reduce((a,d)=>a+d.v,0);
+
+  return `
+    <div style="background:#070d1a;border:1px solid #0a1020;border-radius:10px;padding:14px 10px;margin-bottom:14px">
+      <div style="font-size:9px;color:#374151;letter-spacing:.08em;margin-bottom:10px;margin-left:4px">CUMULATIVE VOLUME DELTA · LIVE PROXY</div>
+      <div style="display:flex;gap:2px;height:160px">${bars}</div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px">
+      <div class="stat-box"><div style="font-size:8px;color:#374151;letter-spacing:.08em;margin-bottom:5px">BUYING PRESSURE</div><div style="font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:700;color:#10B981">${buyP.toLocaleString()}</div></div>
+      <div class="stat-box"><div style="font-size:8px;color:#374151;letter-spacing:.08em;margin-bottom:5px">SELLING PRESSURE</div><div style="font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:700;color:#EF4444">${selP.toLocaleString()}</div></div>
+      <div class="stat-box"><div style="font-size:8px;color:#374151;letter-spacing:.08em;margin-bottom:5px">NET DELTA</div><div style="font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:700;color:${net>=0?"#10B981":"#EF4444"}">${net>=0?"+":""}${net.toLocaleString()}</div></div>
+    </div>
+    <div style="padding:12px 14px;background:rgba(124,58,237,.05);border:1px solid rgba(124,58,237,.15);border-radius:8px">
+      <div style="font-size:9px;color:#7C3AED;font-weight:700;margin-bottom:4px;letter-spacing:.06em">PHASE 2 — TRUE ORDER FLOW</div>
+      <div style="font-size:10px;color:#374151;line-height:1.7">Real footprint candles and bid/ask data from Polygon.io will replace this proxy chart in Phase 2.</div>
+    </div>`;
+}
+
+// ── SIGNAL CARD ────────────────────────────────────────────────
+function signalCardHTML(sig, isLatest) {
+  const isLong   = sig.direction === "LONG";
+  const isStrong = sig.strength  === "STRONG";
+  const doubt    = sig.doubt;
+  const dCol     = doubt?"#F59E0B":DIRC(sig.direction, isStrong);
+  const bgCol    = isLatest?(doubt?"#13100A":isLong?"#0A130D":"#130A0A"):"#080d18";
+  const bdCol    = isLatest?(doubt?"#3D2A00":isLong?"#0D3320":"#330D0D"):"#101828";
+
+  const dirTxt = (doubt?"⚠ ":isLong?"▲ ":"▼ ")+(isStrong?"STRONG ":"")+(isLong?"BUY":"SELL");
+
+  const metrics = [
+    { l:"SCORE",  v:`${sig.score}/100`,              c:dCol      },
+    { l:"ENTRY",  v:fmtP(sig.entry),                 c:"#e2e8f0" },
+    { l:"STOP",   v:fmtP(sig.sl),                    c:"#EF4444" },
+    { l:"TP1",    v:fmtP(sig.tp1),                   c:"#F59E0B" },
+    { l:"TP2",    v:fmtP(sig.tp2),                   c:"#10B981" },
+    { l:"R:R",    v:calcRR(sig.entry,sig.tp2,sig.sl), c:"#a78bfa" },
+  ];
+
+  const factors = [
+    { l:"HTF Trend", a: sig.htf !== "neutral" },
+    { l:"BOS",       a: sig.bos   },
+    { l:"CHoCH",     a: sig.choch },
+    { l:"Bull FVG",  a: sig.bullFVG },
+    { l:"Bear FVG",  a: sig.bearFVG },
+    { l:"Vol Spike", a: sig.volSpike },
+  ];
+
+  return `
+    <div class="signal-card ${isLatest?"new-signal":""}" style="background:${bgCol};border-color:${bdCol}">
+      ${isLatest?`
+        <div style="position:absolute;top:10px;right:12px;display:flex;align-items:center;gap:5px">
+          <div class="dot" style="background:${dCol};animation:pulse 1.6s infinite"></div>
+          <span style="font-size:9px;color:${dCol};font-family:'JetBrains Mono',monospace;letter-spacing:.1em">LIVE</span>
+        </div>`:""}
+      <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:10px">
+        <span style="font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:800;color:${dCol};letter-spacing:.04em">${dirTxt}</span>
+        <span style="font-size:9px;color:#4b5563;font-family:'JetBrains Mono',monospace">${sig.contract} · ${sig.asset} · ${sig.time}</span>
+      </div>
+      <div class="metrics">
+        ${metrics.map(m=>`
+          <div class="metric">
+            <div class="metric-label">${m.l}</div>
+            <div class="metric-val" style="color:${m.c}">${m.v}</div>
+          </div>`).join("")}
+      </div>
+      <div class="pills">
+        ${factors.map(f=>`
+          <div class="pill ${f.a?"on":""}">
+            <div class="pill-dot"></div>
+            <span class="pill-lbl">${f.l}</span>
+          </div>`).join("")}
+        ${doubt?`<div class="pill" style="background:rgba(245,158,11,.08);border-color:rgba(245,158,11,.28)"><span class="pill-lbl" style="color:#F59E0B">⚠ CONFLICTING EVIDENCE</span></div>`:""}
+      </div>
+    </div>`;
+}
+
+// ── RENDER ─────────────────────────────────────────────────────
+function render() {
+  const s      = state;
+  const latest = s.signals[0];
+  const doubt  = s.bullScore > 50 && s.bearScore > 50;
+  const bCol   = SC(s.bullScore);
+  const rCol   = SC(s.bearScore);
+
+  const serverUrl = IS_LOCAL ? "http://localhost:8000" : `https://${HOST}`;
+
+  document.getElementById("app").innerHTML = `
+    <div class="header">
+      <div class="logo">
+        <div class="logo-icon">S</div>
+        <div>
+          <div style="font-weight:800;font-size:15px;letter-spacing:-.02em">SPARTAN</div>
+          <div style="font-size:8px;color:#374151;letter-spacing:.18em">SMC SIGNAL DASHBOARD</div>
+        </div>
+      </div>
+
+      <div class="status-area">
+        <div class="dot" style="background:${s.connected?"#10B981":"#EF4444"};animation:pulse 2s infinite"></div>
+        <span style="font-size:9px;color:#374151;font-family:'JetBrains Mono',monospace">
+          ${s.connected?"LIVE · TV CONNECTED":"RECONNECTING..."}
+        </span>
+      </div>
+    </div>
+
+    <div class="scorebar">
+      ${scoreRingHTML(s.bullScore,"BULL",bCol)}
+      <div style="width:1px;height:44px;background:#0f1929;flex-shrink:0"></div>
+      ${scoreRingHTML(s.bearScore,"BEAR",rCol)}
+
+      ${doubt?`
+        <div style="background:rgba(245,158,11,.07);border:1px solid rgba(245,158,11,.22);border-radius:8px;padding:8px 14px;display:flex;align-items:center;gap:8px">
+          <span style="font-size:16px">⚠</span>
+          <div>
+            <div style="font-size:10px;color:#F59E0B;font-weight:700">CONFLICT DETECTED</div>
+            <div style="font-size:9px;color:#78350F">Both directions elevated — exercise caution</div>
+          </div>
+        </div>`:""}
+
+      ${latest?`
+        <div style="background:${latest.direction==="LONG"?"rgba(16,185,129,.05)":"rgba(239,68,68,.05)"};border:1px solid ${latest.direction==="LONG"?"rgba(16,185,129,.18)":"rgba(239,68,68,.18)"};border-radius:8px;padding:8px 14px">
+          <div style="font-size:8px;color:#374151;letter-spacing:.1em;margin-bottom:3px">LAST SIGNAL · ${latest.time}</div>
+          <div style="font-family:'JetBrains Mono',monospace;font-weight:700;font-size:13px;color:${latest.direction==="LONG"?"#10B981":"#EF4444"}">
+            ${latest.direction==="LONG"?"▲":"▼"} ${latest.strength} ${latest.direction==="LONG"?"BUY":"SELL"}
+          </div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#374151;margin-top:2px">
+            Entry ${fmtP(latest.entry)} · SL ${fmtP(latest.sl)} · TP2 ${fmtP(latest.tp2)}
+          </div>
+        </div>`:""}
+    </div>
+
+    <div class="tabs">
+      ${[["signals","Signals"],["orderflow","Order Flow"],["news","News"],["settings","Settings"]].map(([id,lbl])=>`
+        <button class="tab-btn ${s.tab===id?"active":""}" onclick="setTab('${id}')">${lbl}</button>
+      `).join("")}
+    </div>
+
+    <div class="content">
+
+      ${s.tab==="signals"?`
+        <div>
+          ${s.overrides.length>0?s.overrides.map(o=>`
+            <div class="override-banner">
+              <span style="font-size:18px">⚠</span>
+              <div>
+                <div style="font-size:10px;color:#F59E0B;font-weight:700">SIGNAL OVERRIDE · ${o.time}</div>
+                <div style="font-size:9px;color:#78350F">${o.contract} — Opposing signal detected while potentially in trade. Bull: ${o.bull} Bear: ${o.bear}</div>
+              </div>
+            </div>`).join(""):""}
+
+          <div style="font-size:10px;color:#374151;letter-spacing:.08em;margin-bottom:12px;display:flex;align-items:center;gap:8px">
+            <span>LIVE SIGNAL FEED</span>
+            <div style="flex:1;height:1px;background:#0a1020"></div>
+            <span>${s.signals.length} signals received</span>
+          </div>
+
+          ${s.signals.length===0?`
+            <div class="empty-state">
+              <div class="empty-icon">📡</div>
+              <div class="empty-title">Waiting for signals</div>
+              <div class="empty-sub">
+                Dashboard is ${s.connected?"connected and listening":"reconnecting"}.<br/>
+                Add the Spartan SMC indicator to TradingView, create an alert,<br/>
+                and set the webhook URL to:<br/><br/>
+                <span style="font-family:'JetBrains Mono',monospace;color:#7C3AED;font-size:11px">${serverUrl}/webhook</span>
+              </div>
+            </div>`
+          :s.signals.map((sig,i)=>signalCardHTML(sig,i===0)).join("")}
+        </div>`:""}
+
+      ${s.tab==="orderflow"?deltaChartHTML(s.volData):""}
+
+      ${s.tab==="news"?`
+        <div>
+          <div style="font-size:10px;color:#374151;letter-spacing:.08em;margin-bottom:14px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px">
+            <span>MARKET NEWS FEED</span>
+            <span style="color:#7C3AED">Phase 2: Live Benzinga / Alpaca News</span>
+          </div>
+          ${[
+            { id:1, time:"—", source:"—", headline:"News feed will populate when Benzinga or Alpaca News API is wired in during Phase 2.", sentiment:"neutral", impact:"low" }
+          ].map(n=>`
+            <div style="background:#070d1a;border:1px solid #0a1020;border-left:3px solid ${NC(n.impact)};border-radius:8px;padding:11px 14px;margin-bottom:8px">
+              <div style="font-size:12px;color:#4b5563;line-height:1.5">${n.headline}</div>
+            </div>`).join("")}
+        </div>`:""}
+
+      ${s.tab==="settings"?`
+        <div class="settings-grid">
+          <div class="settings-box">
+            <div style="font-size:11px;font-weight:700;color:#e2e8f0;margin-bottom:18px;letter-spacing:.05em">RISK SETTINGS</div>
+            <div style="margin-bottom:18px">
+              <div style="font-size:10px;color:#6b7280;margin-bottom:8px">Stop Loss Mode</div>
+              <div style="display:flex;gap:5px">
+                ${["ATR","Swing","Fixed"].map(m=>`<button class="mode-btn ${s.riskMode===m?"active":""}" onclick="setMode('${m}')">${m}</button>`).join("")}
+              </div>
+            </div>
+            <div style="margin-bottom:18px">
+              <div style="display:flex;justify-content:space-between;margin-bottom:8px">
+                <span style="font-size:10px;color:#6b7280">Risk Wiggle</span>
+                <span style="font-size:10px;font-family:'JetBrains Mono',monospace;color:${s.riskWiggle>0?"#F59E0B":s.riskWiggle<0?"#10B981":"#6b7280"}">${s.riskWiggle>0?"+":""}${s.riskWiggle}%</span>
+              </div>
+              <input type="range" min="-30" max="30" step="1" value="${s.riskWiggle}"
+                style="background:linear-gradient(90deg,#7C3AED ${((s.riskWiggle+30)/60)*100}%,#1e2433 0%)"
+                oninput="setRisk(this.value)"/>
+              <div style="display:flex;justify-content:space-between;font-size:8px;color:#2d3748;margin-top:3px"><span>Tighter SL</span><span>Looser SL</span></div>
+            </div>
+            <div>
+              <div style="display:flex;justify-content:space-between;margin-bottom:8px">
+                <span style="font-size:10px;color:#6b7280">TP1 R:R (Break Even)</span>
+                <span style="font-size:10px;font-family:'JetBrains Mono',monospace;color:#F59E0B">${s.tp1RR.toFixed(1)}R</span>
+              </div>
+              <input type="range" min="0.5" max="3.0" step="0.1" value="${s.tp1RR}"
+                style="background:linear-gradient(90deg,#7C3AED ${((s.tp1RR-.5)/2.5)*100}%,#1e2433 0%)"
+                oninput="setTP1(this.value)"/>
+            </div>
+          </div>
+
+          <div class="settings-box">
+            <div style="font-size:11px;font-weight:700;color:#e2e8f0;margin-bottom:18px;letter-spacing:.05em">PROFIT SETTINGS</div>
+            <div style="margin-bottom:18px">
+              <div style="display:flex;justify-content:space-between;margin-bottom:8px">
+                <span style="font-size:10px;color:#6b7280">TP2 Main Target R:R</span>
+                <span style="font-size:10px;font-family:'JetBrains Mono',monospace;color:#10B981">${s.tp2RR.toFixed(1)}R</span>
+              </div>
+              <input type="range" min="1.0" max="6.0" step="0.1" value="${s.tp2RR}"
+                style="background:linear-gradient(90deg,#7C3AED ${((s.tp2RR-1)/5)*100}%,#1e2433 0%)"
+                oninput="setTP2(this.value)"/>
+              <div style="display:flex;justify-content:space-between;font-size:8px;color:#2d3748;margin-top:3px"><span>Conservative</span><span>Aggressive</span></div>
+            </div>
+            <div>
+              <div style="display:flex;justify-content:space-between;margin-bottom:8px">
+                <span style="font-size:10px;color:#6b7280">Profit Wiggle</span>
+                <span style="font-size:10px;font-family:'JetBrains Mono',monospace;color:${s.profWiggle>0?"#10B981":s.profWiggle<0?"#EF4444":"#6b7280"}">${s.profWiggle>0?"+":""}${s.profWiggle}%</span>
+              </div>
+              <input type="range" min="-30" max="30" step="1" value="${s.profWiggle}"
+                style="background:linear-gradient(90deg,#7C3AED ${((s.profWiggle+30)/60)*100}%,#1e2433 0%)"
+                oninput="setProf(this.value)"/>
+              <div style="display:flex;justify-content:space-between;font-size:8px;color:#2d3748;margin-top:3px"><span>Lower TP</span><span>Higher TP</span></div>
+            </div>
+          </div>
+
+          <div class="settings-box full">
+            <div style="font-size:11px;font-weight:700;color:#e2e8f0;margin-bottom:14px;letter-spacing:.05em">WEBHOOK URL</div>
+            <div style="background:#060b14;border:1px solid #0f1929;border-radius:6px;padding:12px 14px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+              <span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#a78bfa;word-break:break-all">${serverUrl}/webhook</span>
+              <button onclick="navigator.clipboard.writeText('${serverUrl}/webhook').then(()=>alert('Copied!'))"
+                style="padding:6px 12px;border-radius:5px;border:1px solid #7C3AED;background:rgba(124,58,237,.15);color:#a78bfa;font-size:10px;white-space:nowrap">
+                Copy URL
+              </button>
+            </div>
+            <div style="margin-top:10px;font-size:10px;color:#374151;line-height:1.8;font-family:'JetBrains Mono',monospace">
+              In TradingView: Alerts → Create Alert → Spartan SMC → Any alert() call<br/>
+              Notifications tab → enable Webhook URL → paste the URL above<br/>
+              Message field: leave blank (Pine Script sends JSON automatically)
+            </div>
+          </div>
+
+          <div class="settings-box full">
+            <div style="font-size:11px;font-weight:700;color:#e2e8f0;margin-bottom:14px;letter-spacing:.05em">SIGNAL THRESHOLDS</div>
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
+              ${[
+                { l:"STRONG SIGNAL",   s:"80+", c:"#10B981", d:"All gates required: HTF + FVG + Volume + Structure + PA" },
+                { l:"MODERATE SIGNAL", s:"65+", c:"#F59E0B", d:"Most factors aligned. Min 10 bar cooldown enforced."     },
+                { l:"NO SIGNAL",       s:"<65", c:"#374151", d:"Silent. Nothing drawn on chart. Noise filtered out."      },
+              ].map(t=>`
+                <div style="background:#060b14;border-radius:8px;padding:12px;border:1px solid ${t.c}20">
+                  <div style="font-size:8px;color:${t.c};letter-spacing:.1em;margin-bottom:5px">${t.l}</div>
+                  <div style="font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:700;color:${t.c};margin-bottom:5px">${t.s}</div>
+                  <div style="font-size:9px;color:#374151;line-height:1.55">${t.d}</div>
+                </div>`).join("")}
+            </div>
+          </div>
+        </div>`:""}
+
+    </div>`;
+}
+
+// ── ACTIONS ────────────────────────────────────────────────────
+function setTab(t)   { state.tab = t; render(); }
+function setMode(m)  { state.riskMode = m; render(); }
+function setRisk(v)  { state.riskWiggle = +v; render(); }
+function setProf(v)  { state.profWiggle = +v; render(); }
+function setTP1(v)   { state.tp1RR = +v; render(); }
+function setTP2(v)   { state.tp2RR = +v; render(); }
+
+// ── LIVE VOL TICK ──────────────────────────────────────────────
+setInterval(() => {
+  const last = state.volData[state.volData.length-1];
+  state.volData = [...state.volData.slice(1), { t:last.t+1, v:Math.round((Math.random()-.47)*9000) }];
+  if (state.tab === "orderflow") render();
+}, 2000);
+
+// ── INIT ───────────────────────────────────────────────────────
+connect();
+</script>
+</body>
+</html>
